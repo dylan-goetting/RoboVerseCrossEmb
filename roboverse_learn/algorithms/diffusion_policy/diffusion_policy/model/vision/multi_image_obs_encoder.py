@@ -7,6 +7,9 @@ import torchvision
 from diffusion_policy.common.pytorch_util import dict_apply, replace_submodules
 from diffusion_policy.model.common.module_attr_mixin import ModuleAttrMixin
 from diffusion_policy.model.vision.crop_randomizer import CropRandomizer
+import torch.nn.functional as F
+import logging
+logger = logging.getLogger(__name__)
 
 
 class MultiImageObsEncoder(ModuleAttrMixin):
@@ -24,6 +27,7 @@ class MultiImageObsEncoder(ModuleAttrMixin):
         # renormalize rgb input with imagenet normalization
         # assuming input in [0,1]
         imagenet_norm: bool = False,
+        dino: bool = False,
     ):
         """
         Assumes rgb input: B,C,H,W
@@ -36,7 +40,7 @@ class MultiImageObsEncoder(ModuleAttrMixin):
         key_model_map = nn.ModuleDict()
         key_transform_map = nn.ModuleDict()
         key_shape_map = dict()
-
+        self.dino = dino
         # handle sharing vision backbone
         if share_rgb_model:
             assert isinstance(rgb_model, nn.Module)
@@ -70,6 +74,11 @@ class MultiImageObsEncoder(ModuleAttrMixin):
                                 num_channels=x.num_features,
                             ),
                         )
+                    if dino:
+                        dino_model = DinoEmbeddingMLP().to(self.device)
+                        for param in dino_model.dino.parameters():
+                            param.requires_grad = False
+                        this_model = dino_model
                     key_model_map[key] = this_model
 
                 # configure resize
@@ -102,11 +111,10 @@ class MultiImageObsEncoder(ModuleAttrMixin):
                         this_normalizer = torchvision.transforms.CenterCrop(size=(h, w))
                 # configure normalizer
                 this_normalizer = nn.Identity()
-                if imagenet_norm:
+                if imagenet_norm or dino:
                     this_normalizer = torchvision.transforms.Normalize(
                         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
                     )
-
                 this_transform = nn.Sequential(this_resizer, this_randomizer, this_normalizer)
                 key_transform_map[key] = this_transform
             elif type == "low_dim":
@@ -123,6 +131,9 @@ class MultiImageObsEncoder(ModuleAttrMixin):
         self.rgb_keys = rgb_keys
         self.low_dim_keys = low_dim_keys
         self.key_shape_map = key_shape_map
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        logger.info(f"total parameters: {total_params:,}, trainable: {trainable_params:,}")
 
     def forward(self, obs_dict):
         batch_size = None
@@ -190,3 +201,35 @@ class MultiImageObsEncoder(ModuleAttrMixin):
         example_output = self.forward(example_obs_dict)
         output_shape = example_output.shape[1:]
         return output_shape
+
+
+class DinoEmbeddingMLP(nn.Module):
+    def __init__(self, latent_dim=512):
+        super().__init__()
+
+        # Load the pre-trained DINOv2 model
+        self.dino = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+        self.dino.eval()
+        self.dino.requires_grad_(False)
+        # Freeze DINO parameters (optional)
+        for param in self.dino.parameters():
+            param.requires_grad = False
+
+        # DINO embedding dimension (for dinov2_vits14 it's typically 384)
+        dino_embedding_dim = 384
+
+        # Define MLP for projection to latent space
+        self.mlp = nn.Sequential(
+            nn.Linear(dino_embedding_dim, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, latent_dim)
+        )
+
+
+    def forward(self, images):
+        with torch.no_grad():
+            images_resized = F.interpolate(images, size=(224, 224), mode='bilinear', align_corners=False)
+            embeddings = self.dino(images_resized)
+        latent_output = self.mlp(embeddings)
+
+        return latent_output

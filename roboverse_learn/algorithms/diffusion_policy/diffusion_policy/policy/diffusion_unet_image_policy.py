@@ -11,6 +11,8 @@ from diffusion_policy.model.diffusion.mask_generator import LowdimMaskGenerator
 from diffusion_policy.model.vision.multi_image_obs_encoder import MultiImageObsEncoder
 from diffusion_policy.policy.base_image_policy import BaseImagePolicy
 from einops import rearrange, reduce
+import logging
+logger = logging.getLogger(__name__)
 
 
 class DiffusionUnetImagePolicy(BaseImagePolicy):
@@ -60,6 +62,7 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         )
 
         self.obs_encoder = obs_encoder
+        self.dino = obs_encoder.dino
         self.model = model
         self.noise_scheduler = noise_scheduler
         self.mask_generator = LowdimMaskGenerator(
@@ -81,6 +84,9 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
         self.num_inference_steps = num_inference_steps
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        logger.info(f"total parameters: {total_params:,}, trainable: {trainable_params:,}")
 
     # ========= inference  ============
     def conditional_sample(
@@ -130,6 +136,8 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         # print("!!obs_dict", obs_dict["head_cam"].shape)
         # normalize input
         nobs = self.normalizer.normalize(obs_dict)
+        if self.dino:
+            nobs['head_cam'] = obs_dict['head_cam']
         # print("!!nobs", nobs["head_cam"].shape)
         value = next(iter(nobs.values()))
         B, To = value.shape[:2]
@@ -197,6 +205,8 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         # normalize input
         assert "valid_mask" not in batch
         nobs = self.normalizer.normalize(batch["obs"])
+        if self.dino:
+            nobs['head_cam'] = batch['obs']['head_cam']
         nactions = self.normalizer["action"].normalize(batch["action"])
         batch_size = nactions.shape[0]
         horizon = nactions.shape[1]
