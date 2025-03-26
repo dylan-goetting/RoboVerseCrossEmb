@@ -137,7 +137,7 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         # normalize input
         nobs = self.normalizer.normalize(obs_dict)
         if self.dino:
-            nobs['head_cam'] = obs_dict['head_cam']
+            nobs['head_cam'] = obs_dict['head_cam'].to(self.device)
         # print("!!nobs", nobs["head_cam"].shape)
         value = next(iter(nobs.values()))
         B, To = value.shape[:2]
@@ -206,7 +206,7 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         assert "valid_mask" not in batch
         nobs = self.normalizer.normalize(batch["obs"])
         if self.dino:
-            nobs['head_cam'] = batch['obs']['head_cam']
+            nobs['head_cam'] = batch['obs']['head_cam'].to(self.device)
         nactions = self.normalizer["action"].normalize(batch["action"])
         batch_size = nactions.shape[0]
         horizon = nactions.shape[1]
