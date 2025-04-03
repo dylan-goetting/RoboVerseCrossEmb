@@ -113,4 +113,7 @@ class ScenarioCfg:
                 and traj_filepath.find(".yml") == -1
             ):
                 traj_filepath = os.path.join(traj_filepath, f"{self.robot.name}_v2.pkl.gz")
-            check_and_download(traj_filepath)
+            try:
+                check_and_download(traj_filepath)
+            except Exception as e:
+                log.error(f"Failed to download traj file: {e}")
