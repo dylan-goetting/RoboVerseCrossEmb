@@ -28,6 +28,7 @@ class MultiImageObsEncoder(ModuleAttrMixin):
         # assuming input in [0,1]
         imagenet_norm: bool = False,
         dino: bool = False,
+        train_dino: bool = False,
     ):
         """
         Assumes rgb input: B,C,H,W
@@ -75,9 +76,7 @@ class MultiImageObsEncoder(ModuleAttrMixin):
                             ),
                         )
                     if dino:
-                        dino_model = DinoEmbeddingMLP().to(self.device)
-                        for param in dino_model.dino.parameters():
-                            param.requires_grad = False
+                        dino_model = DinoEmbeddingMLP(train_dino=train_dino).to(self.device)
                         this_model = dino_model
                     key_model_map[key] = this_model
 
@@ -204,16 +203,15 @@ class MultiImageObsEncoder(ModuleAttrMixin):
 
 
 class DinoEmbeddingMLP(nn.Module):
-    def __init__(self, latent_dim=512):
+    def __init__(self, latent_dim=512, train_dino=False):
         super().__init__()
+        self.train_dino = train_dino
 
         # Load the pre-trained DINOv2 model
         self.dino = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-        self.dino.eval()
-        self.dino.requires_grad_(False)
-        # Freeze DINO parameters (optional)
-        for param in self.dino.parameters():
-            param.requires_grad = False
+        if not train_dino:
+            self.dino.eval()
+            self.dino.requires_grad_(False)
 
         # DINO embedding dimension (for dinov2_vits14 it's typically 384)
         dino_embedding_dim = 384
@@ -227,9 +225,13 @@ class DinoEmbeddingMLP(nn.Module):
 
 
     def forward(self, images):
-        with torch.no_grad():
+        if self.train_dino:
             images_resized = F.interpolate(images, size=(224, 224), mode='bilinear', align_corners=False)
             embeddings = self.dino(images_resized)
+        else:
+            with torch.no_grad():
+                images_resized = F.interpolate(images, size=(224, 224), mode='bilinear', align_corners=False)
+                embeddings = self.dino(images_resized)
         latent_output = self.mlp(embeddings)
 
         return latent_output
