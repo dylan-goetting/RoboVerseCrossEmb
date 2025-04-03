@@ -20,9 +20,9 @@ from rich.logging import RichHandler
 
 rootutils.setup_root(__file__, pythonpath=True)
 log.configure(handlers=[{"sink": RichHandler(), "format": "{message}"}])
-from metasim.cfg.randomization import RandomizationMetaCfg
-from metasim.cfg.scenario import ScenarioMetaCfg
-from metasim.cfg.sensors.cameras import PinholeCameraMetaCfg
+from metasim.cfg.randomization import RandomizationCfg
+from metasim.cfg.scenario import ScenarioCfg
+from metasim.cfg.sensors.cameras import PinholeCameraCfg
 from metasim.constants import SimType
 from metasim.utils.demo_util import get_traj
 from metasim.utils.setup_util import get_robot, get_sim_env_class, get_task
@@ -31,7 +31,7 @@ from roboverse_learn.algorithms import PolicyRunner, get_runner
 
 @dataclass
 class Args:
-    random: RandomizationMetaCfg
+    random: RandomizationCfg
     """Domain randomization options"""
     task: str
     """Task name"""
@@ -148,8 +148,8 @@ def main():
     target_robot = get_robot(args.target_robot)
     source_robot = get_robot(args.source_robot)
 
-    camera = PinholeCameraMetaCfg(pos=(1.5, 0, 1.5), look_at=(0.0, 0.0, 0.0))
-    scenario = ScenarioMetaCfg(
+    camera = PinholeCameraCfg(pos=(1.5, 0, 1.5), look_at=(0.0, 0.0, 0.0))
+    scenario = ScenarioCfg(
         task=args.task,
         robot=args.target_robot,
         cameras=[camera],
@@ -190,6 +190,7 @@ def main():
         task_name=args.task,
         subset=args.subset,
     )
+    action_set_steps = 2 if policyRunner.policy_cfg.action_config.action_type == "ee" else 1
 
     ## Data
     tic = time.time()
@@ -232,9 +233,8 @@ def main():
             images_list.append(np.array(obs["rgb"]))
             action = policyRunner.get_action(obs)
 
-            for round_i in range(args.action_set_steps):
+            for round_i in range(action_set_steps):
                 obs, reward, success, time_out, extras = env.step(action)
-            env.handler.render()
 
             # eval
             SuccessOnce = [SuccessOnce[i] or success[i] for i in range(num_envs)]
