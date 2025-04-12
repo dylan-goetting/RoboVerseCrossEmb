@@ -35,18 +35,18 @@ class Args:
     """Target robot name to retarget to"""
     tasks: list[str] = field(default_factory=lambda: ["CloseBox"])
     """List of task names to retarget"""
-    add_noise: bool = False
-    """Whether to add small gaussian noise to source robot joint positions before doing FK"""
-    noise_std: float = 0.01
-    """Standard deviation of noise to add to source robot joint positions (if add_noise is True)"""
+    noise_std: float = 0.2
+    """Standard deviation of noise to add to source robot joint positions (0 for no noise)"""
     output_dir: str = "retarget_data"
     """Directory to save retargeted data"""
     device: str = "cuda:0"
     """Device to run computation on, e.g. 'cuda:0', 'cuda:1', 'cpu'"""
     batch_size: int = 50
     """Batch size for retargeting"""
-    max_timestep: int = 20
+    max_timestep: int = 200
     """Maximum number of timesteps to retarget"""
+    num_demos: int = 100
+    """Number of demonstrations to retarget"""
 
     def __post_init__(self):
         log.info(f"Args: {self}")
@@ -64,15 +64,14 @@ from metasim.utils.demo_util import get_traj
 from metasim.utils.setup_util import get_robot, get_task
 
 
-def retarget_states(states, source_robot, target_robot, add_noise=False, noise_std=0.01, device="cuda:0"):
+def retarget_states(states, source_robot, target_robot, noise_std=0.01, device="cuda:0"):
     """Retarget a batch of states from a source robot to a target robot.
 
     Args:
         states: A list of dictionaries containing robot state information
         source_robot: The source robot configuration
         target_robot: The target robot configuration
-        add_noise: Whether to add noise to the source robot joint positions
-        noise_std: Standard deviation of noise to add to the joint positions
+        noise_std: Standard deviation of noise to add to the source robot joint positions (0 for no noise)
         device: Device to run computation on, e.g. 'cuda:0', 'cuda:1', 'cpu'
 
     Returns:
@@ -101,13 +100,13 @@ def retarget_states(states, source_robot, target_robot, add_noise=False, noise_s
     ]).cuda()
 
     # Add noise if specified
-    if add_noise:
+    if noise_std > 0:
         noise = torch.randn_like(q_tensor) * noise_std
         noisy_q_tensor = q_tensor + noise
 
         # Store the noisy joint positions in each state if needed
         for batch_idx, state in enumerate(states):
-            state["robots"][source_robot.name]["noisy_dof_pos"] = {
+            state["robots"][source_robot.name]["dof_pos"] = {
                 joint_name: noisy_q_tensor[batch_idx, joint_idx].item()
                 for joint_idx, joint_name in enumerate(source_joint_names)
             }
@@ -167,7 +166,6 @@ def retarget_trajectories(
     all_demos_states,
     source_robot,
     target_robot,
-    add_noise=False,
     noise_std=0.01,
     batch_size=50,
     device="cuda:0",
@@ -212,7 +210,7 @@ def retarget_trajectories(
 
             # Retarget the batch
             retargeted_batch = retarget_states(
-                batch_states, source_robot, target_robot, add_noise=add_noise, noise_std=noise_std, device=device
+                batch_states, source_robot, target_robot, noise_std=noise_std, device=device
             )
 
             # Store the retargeted states in the correct trajectories
@@ -222,7 +220,7 @@ def retarget_trajectories(
     return retargeted_trajectories
 
 
-def save_retargeted_data(trajectories, task_name, source_robot_name, target_robot_name, output_dir):
+def save_retargeted_data(trajectories, task_name, source_robot_name, target_robot_name, save_dir):
     """Save all retargeted trajectory data together.
 
     Args:
@@ -230,10 +228,9 @@ def save_retargeted_data(trajectories, task_name, source_robot_name, target_robo
         task_name: Name of the task
         source_robot_name: Name of the source robot
         target_robot_name: Name of the target robot
-        output_dir: Directory to save the retargeted data
+        save_dir: Directory to save the retargeted data
     """
     # Create directory structure if it doesn't exist
-    save_dir = os.path.join(output_dir, task_name, f"{source_robot_name}_to_{target_robot_name}")
     os.makedirs(save_dir, exist_ok=True)
 
     # Add metadata
@@ -278,10 +275,9 @@ def main():
         # Process all demonstrations at once using batched retargeting
         log.info(f"Retargeting {len(all_states)} demonstrations for task {task_name}")
         retargeted_trajectories = retarget_trajectories(
-            all_states,
+            all_states[: args.num_demos],
             source_robot,
             target_robot,
-            add_noise=args.add_noise,
             noise_std=args.noise_std,
             batch_size=args.batch_size,
             device=device,
@@ -290,7 +286,9 @@ def main():
 
         # Save all retargeted trajectories together
         log.info(f"Saving all retargeted trajectories for task {task_name}")
-        save_retargeted_data(retargeted_trajectories, task_name, args.source_robot, args.target_robot, args.output_dir)
+        save_dir = os.path.join(args.output_dir, f"{args.source_robot}_to_{args.target_robot}", task_name)
+
+        save_retargeted_data(retargeted_trajectories, task_name, args.source_robot, args.target_robot, save_dir)
 
     log.info("Retargeting complete")
 
