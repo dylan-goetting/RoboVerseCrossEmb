@@ -15,7 +15,6 @@ log.configure(handlers=[{"sink": RichHandler(), "format": "{message}"}])
 import os
 from dataclasses import dataclass
 
-import numpy as np
 import rootutils
 import tyro
 
@@ -48,14 +47,14 @@ class Args:
 
 
 args = tyro.cli(Args)
-import random
-
-random.seed(args.random_seed)
 
 #########################################
 ### Import packages
 #########################################
 import pickle
+import random
+
+import numpy as np
 
 from metasim.cfg.randomization import RandomizationCfg
 from metasim.cfg.render import RenderCfg
@@ -63,6 +62,9 @@ from metasim.cfg.scenario import ScenarioCfg
 from metasim.cfg.sensors import PinholeCameraCfg
 from metasim.constants import SimType
 from metasim.utils.setup_util import get_sim_env_class
+
+np.random.seed(args.random_seed)
+random.seed(args.random_seed)
 
 
 def load_retarget_data(retarget_data_path, task):
@@ -95,13 +97,16 @@ def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_d
     # Initialize environment
     handler_class = get_sim_env_class(SimType(args.sim))
     camera = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.5, 0.0, 1.5), look_at=(0.0, 0.0, 0.0))
-
+    camera1 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.7, 0.0, 1.3), look_at=(0.0, 0.0, 0.0))
+    # camera2 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.3, 0.0, 1.7), look_at=(0.0, 0.0, 0.0))
+    # camera3 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1, 0.0, 2), look_at=(0.0, 0.0, 0.0))
+    cameras = [camera]
     # Configure scene
     scenario = ScenarioCfg(
         task=task,
         robot=robot,
         scene=None,
-        cameras=[camera],
+        cameras=cameras,
         random=RandomizationCfg(level=random_level),
         try_add_table=True,
         render=RenderCfg(),
@@ -112,7 +117,10 @@ def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_d
     )
 
     # Create environment
+
     env = handler_class(scenario)
+    np.random.seed(args.random_seed)
+    random.seed(args.random_seed)
 
     # Flatten trajectories to get the first num_steps frames across all trajectories
     states = []
@@ -121,6 +129,7 @@ def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_d
 
     # Limit to num_steps
     states = random.sample(states, num_steps)
+    # rng_state = random.getstate()
 
     log.info(f"Rendering {len(states)} steps from {robot} trajectories")
 
@@ -141,15 +150,18 @@ def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_d
             padded_states = batch_states
 
         # Reset environment with the batch of states
+        # random.setstate(rng_state)
         obs, _ = env.reset(states=padded_states)
 
         # Extract RGB images from observations and save only the valid ones
         for i in range(batch_size):
             global_step_idx = batch_start + i
-            img = obs[i]["cameras"]["camera0"]["rgb"].cpu().numpy()
-
             # Save the image directly
-            save_single_image(img, output_dir, robot, global_step_idx)
+            for cameraNdx in range(len(cameras)):
+                img = obs.cameras["camera0"].rgb[i].cpu().numpy()
+                filename = f"{robot}_task{task}_step{global_step_idx}_camera{cameraNdx}.png"
+                filepath = os.path.join(output_dir, filename)
+                save_single_image(img, filepath)
 
         log.info(f"Processed batch {batch_start // num_envs + 1}/{(len(states) - 1) // num_envs + 1}")
 
@@ -159,20 +171,15 @@ def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_d
     log.info("Environment closed")
 
 
-def save_single_image(img_data, output_dir, robot, step_idx):
+def save_single_image(img_data, filepath):
     """Save a single image to a file.
 
     Args:
         img_data: Image data as a numpy array
-        output_dir: Directory to save the image to
-        robot_name: Name of the robot
-        step_idx: Step index
+        filepath: Path to save the image to
+
     """
     import cv2
-
-    # Create filename
-    filename = f"{robot}_step{step_idx}.png"
-    filepath = os.path.join(output_dir, filename)
 
     if img_data.dtype != np.uint8:
         if img_data.max() <= 1.0:

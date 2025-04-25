@@ -35,17 +35,17 @@ class Args:
     """Target robot name to retarget to"""
     tasks: list[str] = field(default_factory=lambda: ["CloseBox"])
     """List of task names to retarget"""
-    noise_std: float = 0.2
+    noise_std: float = 0.0
     """Standard deviation of noise to add to source robot joint positions (0 for no noise)"""
     output_dir: str = "retarget_data"
     """Directory to save retargeted data"""
     device: str = "cuda:0"
     """Device to run computation on, e.g. 'cuda:0', 'cuda:1', 'cpu'"""
-    batch_size: int = 50
+    batch_size: int = 40
     """Batch size for retargeting"""
     max_timestep: int = 200
     """Maximum number of timesteps to retarget"""
-    num_demos: int = 100
+    num_demos: int = 40
     """Number of demonstrations to retarget"""
 
     def __post_init__(self):
@@ -273,9 +273,10 @@ def main():
         init_states, all_actions, all_states = get_traj(task, source_robot, None)
 
         # Process all demonstrations at once using batched retargeting
-        log.info(f"Retargeting {len(all_states)} demonstrations for task {task_name}")
+        num_demos = min(len(all_states), args.num_demos)
+        log.info(f"Retargeting {num_demos} demonstrations for task {task_name}")
         retargeted_trajectories = retarget_trajectories(
-            all_states[: args.num_demos],
+            all_states[:num_demos],
             source_robot,
             target_robot,
             noise_std=args.noise_std,
