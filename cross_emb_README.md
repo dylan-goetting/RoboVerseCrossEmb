@@ -1,7 +1,7 @@
 To generate retargeted data from a source robot to a target robot, run:
 
 ```bash
-python metasim/scripts/collect_retarget_data.py --source_robot=franka --target_robot=sawyer --output_dir=retarget_data/franka_to_sawyer --batch_size 50 --num_demos 50 --max_timestep 200 --tasks CloseBox BasketballInHoop
+python metasim/scripts/collect_retarget_data.py --source_robot=franka --target_robot=sawyer --output_dir=retarget_data --batch_size 50 --num_demos 50 --max_timestep 200 --tasks CloseBox BasketballInHoop
 ```
 
 This will load in the trajectory data from the source robot on the provided tasks, and for every state in that trajectory, retarget the target to have the same ee pose. Joint positions for both robots are stored in a pickle file
