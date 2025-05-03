@@ -76,7 +76,7 @@ def load_retarget_data(retarget_data_path, task):
     Returns:
         Dict containing retargeted data
     """
-    pkl_path = os.path.join(retarget_data_path, task, "retargeted_data.pkl")
+    pkl_path = os.path.join(retarget_data_path, task, "retargeted_data_v2.pkl")
     with open(pkl_path, "rb") as f:
         retarget_data = pickle.load(f)
     log.info(f"Loaded {len(retarget_data['trajectories'])} retargeted trajectories")
@@ -100,7 +100,7 @@ def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_d
     camera1 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.7, 0.0, 1.3), look_at=(0.0, 0.0, 0.0))
     # camera2 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.3, 0.0, 1.7), look_at=(0.0, 0.0, 0.0))
     # camera3 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1, 0.0, 2), look_at=(0.0, 0.0, 0.0))
-    cameras = [camera]
+    cameras = [camera]#[camera, camera1]
     # Configure scene
     scenario = ScenarioCfg(
         task=task,
@@ -200,7 +200,7 @@ def save_single_image(img_data, filepath):
 def main():
     """Main function to render and save trajectory images."""
     # Get the directory of the data path for output
-    output_dir = args.data_path + "/images"
+    output_dir = args.data_path + f"/{args.task}/images/{args.robot}"
     os.makedirs(output_dir, exist_ok=True)
 
     # Load retargeting data

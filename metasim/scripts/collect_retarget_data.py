@@ -161,7 +161,7 @@ def retarget_states(states, source_robot, target_robot, noise_std=0.01, device="
 
     return retargeted_states
 
-
+ 
 def retarget_trajectories(
     all_demos_states,
     source_robot,
@@ -247,7 +247,7 @@ def save_retargeted_data(trajectories, task_name, source_robot_name, target_robo
     # Save as a demo using the save_demo utility
     import pickle as pkl
 
-    with open(os.path.join(save_dir, "retargeted_data.pkl"), "wb") as f:
+    with open(os.path.join(save_dir, "retargeted_data_v2.pkl"), "wb") as f:
         pkl.dump(retargeted_data, f)
     log.info(f"Saved {len(trajectories)} retargeted trajectories to {save_dir}")
 

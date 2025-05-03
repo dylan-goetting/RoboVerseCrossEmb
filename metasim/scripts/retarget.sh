@@ -1,0 +1,1 @@
+python metasim/scripts/collect_retarget_data.py --source_robot=franka --target_robot=sawyer --output_dir=retarget_data/franka_to_sawyer --batch_size 50 --num_demos 50 --max_timestep 200 --tasks CloseBox
