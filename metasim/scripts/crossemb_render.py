@@ -17,12 +17,36 @@ from dataclasses import dataclass
 
 import rootutils
 import tyro
-
+import time
 rootutils.setup_root(__file__, pythonpath=True)
+
+
+#########################################
+### Import packages
+#########################################
+import pickle
+import random
+
+import numpy as np
+
+from metasim.cfg.randomization import RandomizationCfg
+from metasim.cfg.render import RenderCfg
+from metasim.cfg.scenario import ScenarioCfg
+from metasim.cfg.sensors import PinholeCameraCfg
+from metasim.constants import SimType
+from metasim.utils.setup_util import get_sim_env_class
+
+
+import debugpy
+
 
 
 @dataclass
 class Args:
+    random: RandomizationCfg
+    """Domain randomization options"""
+    render: RenderCfg
+    """Renderer options"""
     data_path: str = "retarget_data/franka_to_sawyer"
     """Path to the retargeting data output by collect_retarget_data.py"""
     task: str = "CloseBox"
@@ -45,24 +69,7 @@ class Args:
     def __post_init__(self):
         log.info(f"Args: {self}")
 
-
 args = tyro.cli(Args)
-
-#########################################
-### Import packages
-#########################################
-import pickle
-import random
-
-import numpy as np
-
-from metasim.cfg.randomization import RandomizationCfg
-from metasim.cfg.render import RenderCfg
-from metasim.cfg.scenario import ScenarioCfg
-from metasim.cfg.sensors import PinholeCameraCfg
-from metasim.constants import SimType
-from metasim.utils.setup_util import get_sim_env_class
-
 np.random.seed(args.random_seed)
 random.seed(args.random_seed)
 
@@ -83,7 +90,7 @@ def load_retarget_data(retarget_data_path, task):
     return retarget_data
 
 
-def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_dir, random_level):
+def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_dir, random_cfg, render_cfg):
     """Render images from robot trajectories.
 
     Args:
@@ -97,19 +104,21 @@ def render_trajectories(trajectories, task, robot, num_envs, num_steps, output_d
     # Initialize environment
     handler_class = get_sim_env_class(SimType(args.sim))
     camera = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.5, 0.0, 1.5), look_at=(0.0, 0.0, 0.0))
-    camera1 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.7, 0.0, 1.3), look_at=(0.0, 0.0, 0.0))
+    camera1 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.7, 0.0, 1.0), look_at=(0.0, 0.0, 0.0))
     # camera2 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1.3, 0.0, 1.7), look_at=(0.0, 0.0, 0.0))
     # camera3 = PinholeCameraCfg(data_types=["rgb", "depth"], pos=(1, 0.0, 2), look_at=(0.0, 0.0, 0.0))
-    cameras = [camera]#[camera, camera1]
+    cameras = [camera1]#[camera, camera1]
     # Configure scene
+
     scenario = ScenarioCfg(
         task=task,
         robot=robot,
         scene=None,
         cameras=cameras,
-        random=RandomizationCfg(level=random_level),
+        # random=RandomizationCfg(level=random_level),
+        random=random_cfg,
         try_add_table=True,
-        render=RenderCfg(),
+        render=render_cfg,
         split="all",
         sim=args.sim,
         headless=args.headless,
@@ -200,7 +209,8 @@ def save_single_image(img_data, filepath):
 def main():
     """Main function to render and save trajectory images."""
     # Get the directory of the data path for output
-    output_dir = args.data_path + f"/{args.task}/images/{args.robot}"
+    cur_time = time.strftime("%m-%d_%H-%M-%S")
+    output_dir = args.data_path + f"/{args.task}/images/{args.robot}/{cur_time}"
     os.makedirs(output_dir, exist_ok=True)
 
     # Load retargeting data
@@ -214,7 +224,8 @@ def main():
         args.num_envs,
         args.num_steps,
         output_dir,
-        args.random_level,
+        args.random,
+        args.render,
     )
 
     log.info("Rendering complete!")
