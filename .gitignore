@@ -72,6 +72,9 @@ _data
 *.mp4
 *.png
 *.jpg
+*.xml
+*.stls
+*.obj
 
 *.zip
 *.tar
@@ -89,7 +92,6 @@ roboverse_data0/
 docs/
 id_ed25519*
 id_rsa*
-*.mp4
 
 
 # for docker
