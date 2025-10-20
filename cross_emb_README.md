@@ -14,7 +14,7 @@ Then to render the paired images from the retargeted data, run:
 
 ```bash
 python metasim/scripts/crossemb_render.py --data_path=retarget_data/franka_to_sawyer --task=CloseBox --robot=sawyer --num_envs 20 --num_steps 200 --sim isaaclab --random_level 0 --headless
-python metasim/scripts/crossemb_render.py --data_path=retarget_data/franka_to_sawyer --task=CloseBox --robot=franka --num_envs 20 --num_steps 200 --sim isaaclab --random_level 0 --headless
+python metasim/scripts/crossemb_render.py --data_path=retarget_data/franka_to_sawyer --task=BasketballInHoop --robot=franka --num_envs 20 --num_steps 200 --sim isaaclab --random_level 1 --headless
 ```
 This script has to be run seperately for each task and robot
 --num_steps: Total number of images to render, these are sampled from random from all the joint poses stored above
