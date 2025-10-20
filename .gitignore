@@ -85,8 +85,12 @@ build
 metasim/cfg/tasks/arnold/Arnold
 dist
 
+roboverse_data0/
+docs/
 id_ed25519*
 id_rsa*
+*.mp4
+
 
 # for docker
 .env
